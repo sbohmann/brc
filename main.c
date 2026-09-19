@@ -80,7 +80,7 @@ struct collector {
     struct node *data;
 };
 
-bool process_line(struct collector *self) {
+bool collector_process_line(struct collector *self) {
     struct optional_char first_char = read_optional_char(self->fd);
     if (!first_char.present) {
         return false;
@@ -91,6 +91,8 @@ bool process_line(struct collector *self) {
         cursor = node_subnode(cursor, c);
         c = read_char(self->fd);
     }
+    // TODO values
+    return true;
 }
 
 int main(void) {
@@ -100,7 +102,11 @@ int main(void) {
         return 1;
     }
 
-    while (process_line(fd));
+    struct collector collector = {
+        .fd = fd
+    };
+
+    while (collector_process_line(&collector));
 
     close(fd);
     return 0;
