@@ -17,6 +17,26 @@ struct node {
     struct values *values;
 };
 
+struct node * allocate_node(void) {
+    struct node *result = malloc(sizeof(struct node));
+    if (result == nullptr) {
+        perror("Failed to allocate node");
+        exit(1);
+    }
+    *result = (struct node) {};
+    return result;
+}
+
+struct node * node_subnode(struct node *self, char c) {
+    unsigned char index = (unsigned char)c;
+    struct node *subnode = self->subnodes[index];
+    if (subnode == nullptr) {
+        subnode = allocate_node();
+        self->subnodes[index] = subnode;
+    }
+    return subnode;
+}
+
 char read_char(int fd) {
     char c;
     int result = read(fd, &c, 1);
@@ -55,13 +75,22 @@ enum line_state {
     location_measurement
 };
 
-bool process_line(int fd) {
-    char c;
-    struct optional_char first_char = read_optional_char(fd);
+struct collector {
+    int fd;
+    struct node *data;
+};
+
+bool process_line(struct collector *self) {
+    struct optional_char first_char = read_optional_char(self->fd);
     if (!first_char.present) {
         return false;
     }
-    c = first_char.value;
+    char c = first_char.value;
+    struct node *cursor = self->data;
+    while (c != ';') {
+        cursor = node_subnode(cursor, c);
+        c = read_char(self->fd);
+    }
 }
 
 int main(void) {
