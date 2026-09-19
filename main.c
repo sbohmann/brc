@@ -48,10 +48,8 @@ void node_update(struct node *self, int64_t value) {
         self->values = values;
         *self->values = (struct values) {
             .minimum = value,
-            .maximum = value,
-            .number = 1
+            .maximum = value
         };
-        return;
     }
     if (value < values->minimum) {
         values->minimum = value;
@@ -144,9 +142,9 @@ bool collector_process_line(struct collector *self) {
     if (negative) {
         value = -value;
     }
-    c = read_char(self->fd);
-    if (c != '\n') {
-        fprintf(stderr, "Expected newline: %d", c);
+    struct optional_char line_end = read_optional_char(self->fd);
+    if (line_end.present && line_end.value != '\n') {
+        fprintf(stderr, "Expected newline or EOF: %d", line_end.value);
         exit(1);
     }
     node_update(cursor, value);
