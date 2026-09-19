@@ -37,6 +37,26 @@ struct node * node_subnode(struct node *self, char c) {
     return subnode;
 }
 
+void node_update(struct node *self, int64_t value) {
+    struct values *values = self-> values;
+    if (values == nullptr) {
+        struct values *values = malloc(sizeof(struct values));
+        if (values == nullptr) {
+            perror("Failed to allocate values for a node");
+            exit(1);
+        }
+        self->values = values;
+    }
+    if (value < values->minimum) {
+        values->minimum = value;
+    }
+    if (value > values->maximum) {
+        values->maximum = value;
+    }
+    values->sum += value;
+    ++values->number;
+}
+
 char read_char(int fd) {
     char c;
     int result = read(fd, &c, 1);
@@ -80,6 +100,14 @@ struct collector {
     struct node *data;
 };
 
+uint8_t read_digit(char c) {
+    if (c < '0' || c > '9') {
+        fprintf(stderr, "Not a digit: %d", c);
+        exit(1);
+    }
+    return c - '0';
+}
+
 bool collector_process_line(struct collector *self) {
     struct optional_char first_char = read_optional_char(self->fd);
     if (!first_char.present) {
@@ -91,7 +119,17 @@ bool collector_process_line(struct collector *self) {
         cursor = node_subnode(cursor, c);
         c = read_char(self->fd);
     }
-    // TODO values
+    int64_t value = 0;
+    while (c != '.') {
+        uint8_t digit = read_digit(c);
+        value *= 10;
+        value += digit;
+    }
+    c = read_char(self->fd);
+    uint8_t post_point_digit = read_digit(c);
+    value *= 10;
+    value += post_point_digit;
+    node_update(cursor, value);
     return true;
 }
 
@@ -102,8 +140,11 @@ int main(void) {
         return 1;
     }
 
+    struct node root = {};
+
     struct collector collector = {
-        .fd = fd
+        .fd = fd,
+        .data = &root
     };
 
     while (collector_process_line(&collector));
