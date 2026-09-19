@@ -46,6 +46,7 @@ void node_update(struct node *self, int64_t value) {
             exit(1);
         }
         self->values = values;
+        *self->values = (struct values) {};
     }
     if (value < values->minimum) {
         values->minimum = value;
@@ -59,7 +60,7 @@ void node_update(struct node *self, int64_t value) {
 
 char read_char(int fd) {
     char c;
-    int result = read(fd, &c, 1);
+    ssize_t result = read(fd, &c, 1);
     if (result != 1) {
         perror("Failed to read next character");
         exit(1);
@@ -119,11 +120,13 @@ bool collector_process_line(struct collector *self) {
         cursor = node_subnode(cursor, c);
         c = read_char(self->fd);
     }
+    c = read_char(self->fd);
     int64_t value = 0;
     while (c != '.') {
         uint8_t digit = read_digit(c);
         value *= 10;
         value += digit;
+        c= read_char(self->fd);
     }
     c = read_char(self->fd);
     uint8_t post_point_digit = read_digit(c);
