@@ -46,7 +46,12 @@ void node_update(struct node *self, int64_t value) {
             exit(1);
         }
         self->values = values;
-        *self->values = (struct values) {};
+        *self->values = (struct values) {
+            .minimum = value,
+            .maximum = value,
+            .number = 1
+        };
+        return;
     }
     if (value < values->minimum) {
         values->minimum = value;
@@ -122,6 +127,10 @@ bool collector_process_line(struct collector *self) {
     }
     c = read_char(self->fd);
     int64_t value = 0;
+    bool negative = c == '-';
+    if (negative) {
+        c = read_char(self->fd);
+    }
     while (c != '.') {
         uint8_t digit = read_digit(c);
         value *= 10;
@@ -132,6 +141,14 @@ bool collector_process_line(struct collector *self) {
     uint8_t post_point_digit = read_digit(c);
     value *= 10;
     value += post_point_digit;
+    if (negative) {
+        value = -value;
+    }
+    c = read_char(self->fd);
+    if (c != '\n') {
+        fprintf(stderr, "Expected newline: %d", c);
+        exit(1);
+    }
     node_update(cursor, value);
     return true;
 }
