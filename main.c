@@ -18,7 +18,8 @@ struct node {
 };
 
 enum {
-    read_buffer_size = 1024 * 1024
+    read_buffer_size = 1024 * 1024,
+    max_station_name_length = 1024
 };
 
 struct node * allocate_node(void) {
@@ -63,6 +64,40 @@ void node_update(struct node *self, int64_t value) {
     }
     values->sum += value;
     ++values->number;
+}
+
+void print_measurement(int64_t value) {
+    if (value < 0) {
+        putchar('-');
+        value = -value;
+    }
+    printf("%lld.%lld", value / 10, value % 10);
+}
+
+void node_print_results(struct node *self, char *name, size_t name_length) {
+    if (self->values != nullptr) {
+        fwrite(name, 1, name_length, stdout);
+        putchar('=');
+        print_measurement(self->values->minimum);
+        putchar('/');
+        print_measurement(self->values->sum / (int64_t)self->values->number);
+        putchar('/');
+        print_measurement(self->values->maximum);
+        putchar('\n');
+    }
+
+    if (name_length == max_station_name_length) {
+        fprintf(stderr, "Station name too long");
+        exit(1);
+    }
+
+    for (size_t i = 0; i < 256; ++i) {
+        struct node *subnode = self->subnodes[i];
+        if (subnode != nullptr) {
+            name[name_length] = (char)i;
+            node_print_results(subnode, name, name_length + 1);
+        }
+    }
 }
 
 struct optional_char {
@@ -175,6 +210,9 @@ int main(void) {
     };
 
     while (collector_process_line(&collector));
+
+    char name[max_station_name_length];
+    node_print_results(&root, name, 0);
 
     close(fd);
     return 0;
