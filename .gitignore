@@ -1,0 +1,5 @@
+/.idea
+/cmake-build-debug
+/weather_stations.csv
+/measurements.txt
+/create_measurements.py
