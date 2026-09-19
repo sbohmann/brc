@@ -17,6 +17,10 @@ struct node {
     struct values *values;
 };
 
+enum {
+    read_buffer_size = 1024 * 1024
+};
+
 struct node * allocate_node(void) {
     struct node *result = malloc(sizeof(struct node));
     if (result == nullptr) {
@@ -61,38 +65,10 @@ void node_update(struct node *self, int64_t value) {
     ++values->number;
 }
 
-char read_char(int fd) {
-    char c;
-    ssize_t result = read(fd, &c, 1);
-    if (result != 1) {
-        perror("Failed to read next character");
-        exit(1);
-    }
-    return c;
-}
-
 struct optional_char {
     bool present;
     char value;
 };
-
-struct optional_char read_optional_char(int fd) {
-    char c;
-    ssize_t result = read(fd, &c, 1);
-    if (result == 0) {
-        return (struct optional_char) {
-            .present = false
-        };
-    }
-    if (result < 0) {
-        perror("Unexpected result");
-        exit(1);
-    }
-    return (struct optional_char) {
-        .present = true,
-        .value = c
-    };
-}
 
 enum line_state {
     location_name,
@@ -102,7 +78,40 @@ enum line_state {
 struct collector {
     int fd;
     struct node *data;
+    size_t buffer_position;
+    size_t buffer_length;
+    char buffer[read_buffer_size];
 };
+
+struct optional_char collector_read_optional_char(struct collector *self) {
+    if (self->buffer_position == self->buffer_length) {
+        ssize_t result = read(self->fd, self->buffer, sizeof(self->buffer));
+        if (result == 0) {
+            return (struct optional_char) {
+                .present = false
+            };
+        }
+        if (result < 0) {
+            perror("Failed to refill read buffer");
+            exit(1);
+        }
+        self->buffer_position = 0;
+        self->buffer_length = (size_t)result;
+    }
+    return (struct optional_char) {
+        .present = true,
+        .value = self->buffer[self->buffer_position++]
+    };
+}
+
+char collector_read_char(struct collector *self) {
+    struct optional_char result = collector_read_optional_char(self);
+    if (!result.present) {
+        fprintf(stderr, "Unexpected EOF");
+        exit(1);
+    }
+    return result.value;
+}
 
 uint8_t read_digit(char c) {
     if (c < '0' || c > '9') {
@@ -113,7 +122,7 @@ uint8_t read_digit(char c) {
 }
 
 bool collector_process_line(struct collector *self) {
-    struct optional_char first_char = read_optional_char(self->fd);
+    struct optional_char first_char = collector_read_optional_char(self);
     if (!first_char.present) {
         return false;
     }
@@ -121,28 +130,28 @@ bool collector_process_line(struct collector *self) {
     struct node *cursor = self->data;
     while (c != ';') {
         cursor = node_subnode(cursor, c);
-        c = read_char(self->fd);
+        c = collector_read_char(self);
     }
-    c = read_char(self->fd);
+    c = collector_read_char(self);
     int64_t value = 0;
     bool negative = c == '-';
     if (negative) {
-        c = read_char(self->fd);
+        c = collector_read_char(self);
     }
     while (c != '.') {
         uint8_t digit = read_digit(c);
         value *= 10;
         value += digit;
-        c= read_char(self->fd);
+        c= collector_read_char(self);
     }
-    c = read_char(self->fd);
+    c = collector_read_char(self);
     uint8_t post_point_digit = read_digit(c);
     value *= 10;
     value += post_point_digit;
     if (negative) {
         value = -value;
     }
-    struct optional_char line_end = read_optional_char(self->fd);
+    struct optional_char line_end = collector_read_optional_char(self);
     if (line_end.present && line_end.value != '\n') {
         fprintf(stderr, "Expected newline or EOF: %d", line_end.value);
         exit(1);
@@ -152,7 +161,7 @@ bool collector_process_line(struct collector *self) {
 }
 
 int main(void) {
-    int fd = open("measurements.txt", O_RDONLY);
+    int fd = open("measurements_1m.txt", O_RDONLY);
     if (fd == -1) {
         perror("Error opening measurements.txt");
         return 1;
