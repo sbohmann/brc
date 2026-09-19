@@ -40,7 +40,7 @@ struct node * node_subnode(struct node *self, char c) {
 void node_update(struct node *self, int64_t value) {
     struct values *values = self-> values;
     if (values == nullptr) {
-        struct values *values = malloc(sizeof(struct values));
+        values = malloc(sizeof(struct values));
         if (values == nullptr) {
             perror("Failed to allocate values for a node");
             exit(1);
